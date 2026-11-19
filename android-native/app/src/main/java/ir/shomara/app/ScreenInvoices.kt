@@ -433,6 +433,7 @@ fun saveInvoice(act: MainActivity, inv: Invoice, finalize: Boolean) {
     if (inv.paid < 0L || inv.paid > Db.invoiceTotals(inv).total) { UI.toast(act, "مبلغ پرداختی خارج از محدوده فاکتور است؛ پیش‌دریافت را جدا ثبت کنید"); return }
     val partner = Db.db.partners.firstOrNull { it.id == inv.partnerId }
     if (partner == null) { UI.toast(act, "طرف‌حساب انتخاب‌شده وجود ندارد؛ دوباره انتخاب کنید"); return }
+    val isPurchase = inv.kind == K_PURCHASE || inv.kind == K_PURCHASE_RET
     if (isPurchase && partner.type == "customer") { UI.toast(act, "در فاکتور خرید باید فروشنده انتخاب شود"); return }
     if (!isPurchase && partner.type == "supplier") { UI.toast(act, "در فاکتور فروش باید مشتری انتخاب شود"); return }
     if (finalize && inv.lines.any { line -> Db.db.items.firstOrNull { it.id == line.itemId }?.service != true } && Db.db.warehouses.none { it.id == inv.warehouseId }) { UI.toast(act, "برای نهایی‌کردن فاکتور کالا، انبار معتبر انتخاب کنید"); return }

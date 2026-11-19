@@ -1096,7 +1096,7 @@ fun projectSheet(act: MainActivity) {
                 if (dueV.isNotBlank() && !datePattern.matches(dueV)) { UI.toast(act, "تاریخ پایان را با قالب سال/ماه/روز وارد کنید"); return@primaryBtn }
                 if (codeV.isNotBlank() && Db.db.projects.any { it.code.equals(codeV, true) }) { UI.toast(act, "کد پروژه تکراری است"); return@primaryBtn }
                 val normalizedDate = { raw: String ->
-                    val parts = raw.map { ch -> when(ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.split('/')
+                    val parts = raw.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.joinToString("").split('/')
                     if (parts.size != 3) "" else {
                         val y = parts[0].toIntOrNull() ?: 0; val m = parts[1].toIntOrNull() ?: 0; val d0 = parts[2].toIntOrNull() ?: 0
                         if (y < 1000 || m !in 1..12 || d0 !in 1..31) "" else String.format(java.util.Locale.ROOT, "%04d/%02d/%02d", y, m, d0)
@@ -1109,7 +1109,7 @@ fun projectSheet(act: MainActivity) {
                 if (startNorm.isNotBlank() && dueNorm.isNotBlank() && startNorm > dueNorm) { UI.toast(act, "تاریخ پایان قبل از شروع است"); return@primaryBtn }
                 val saved = Db.update { d -> d.copy(projects = d.projects + Project(
                     Db.newId("pr"), nameV, projPartner, rateV,
-                    PROJ_COLORS[d.projects.size % PROJ_COLORS.size], false, codeV, startV, dueV, budgetV, descV
+                    PROJ_COLORS[d.projects.size % PROJ_COLORS.size], false, codeV, startNorm, dueNorm, budgetV, descV
                 )) }
                 if (!saved) { UI.toast(act, "پروژه ذخیره نشد؛ اطلاعات را نگه دارید و دوباره تلاش کنید"); return@primaryBtn }
                 projPartner = ""

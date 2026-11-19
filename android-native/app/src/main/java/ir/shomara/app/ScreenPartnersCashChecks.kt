@@ -174,10 +174,10 @@ fun partnerEditorSheet(act: MainActivity, p0: Partner) {
                 if (p.email.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(p.email.trim()).matches()) { UI.toast(act, "ایمیل نامعتبر است"); return@primaryBtn }
                 val postalDigits = p.postalCode.filter { it.isDigit() }
                 if (p.postalCode.isNotBlank() && postalDigits.length != 10) { UI.toast(act, "کد پستی باید ۱۰ رقم باشد"); return@primaryBtn }
-                val economicDigits = p.economicCode.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }
+                val economicDigits = p.economicCode.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }.joinToString("")
                 if (p.economicCode.isNotBlank() && economicDigits.length !in 11..14) { UI.toast(act, "شناسه اقتصادی باید ۱۱ تا ۱۴ رقم باشد"); return@primaryBtn }
                 if (p.creditLimit < 0 || p.paymentTermDays < 0) { UI.toast(act, "سقف اعتبار و مهلت تسویه نمی‌توانند منفی باشند"); return@primaryBtn }
-                val nidDigits = p.nationalId.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }
+                val nidDigits = p.nationalId.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }.joinToString("")
                 if (p.nationalId.isNotBlank() && nidDigits.length !in 10..12) { UI.toast(act, "کد ملی/شناسه ملی باید ۱۰ تا ۱۲ رقم باشد"); return@primaryBtn }
                 if (nidDigits.length == 10 && p.nationalId.isNotBlank()) {
                     val digits = nidDigits.map { it - '0' }
@@ -186,7 +186,7 @@ fun partnerEditorSheet(act: MainActivity, p0: Partner) {
                     val valid = if (sum < 2) check == sum else check == 11 - sum
                     if (!valid) { UI.toast(act, "کد ملی واردشده معتبر نیست"); return@primaryBtn }
                 }
-                fun normalizeId(raw: String): String = raw.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }
+                fun normalizeId(raw: String): String = raw.map { ch -> when (ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.filter { it.isDigit() }.joinToString("")
                 if (nidDigits.isNotEmpty() && current.partners.any { it.id != p.id && normalizeId(it.nationalId) == nidDigits }) { UI.toast(act, "این شناسه قبلاً برای طرف‌حساب دیگری ثبت شده است"); return@primaryBtn }
                 val exists = current.partners.any { it.id == p.id }
                 val saved = Db.update { d -> d.copy(partners = if (exists) d.partners.map { if (it.id == p.id) p else it } else d.partners + p) }
