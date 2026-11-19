@@ -1,0 +1,56 @@
+name: Build Shomara APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Kotlin compiler
+        run: |
+          curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.0.21/kotlin-compiler-2.0.21.zip -o kotlin.zip
+          unzip -q kotlin.zip -d "$RUNNER_TEMP/kotlin"
+          echo "KOTLINC_PATH=$RUNNER_TEMP/kotlin/kotlinc/bin/kotlinc" >> "$GITHUB_ENV"
+
+      - name: Create temporary debug signing key
+        run: |
+          mkdir -p "$RUNNER_TEMP/signing"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/signing/shomara-debug.jks" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Shomara,C=IR"
+          echo "SHOMARA_KEYSTORE_PATH=$RUNNER_TEMP/signing/shomara-debug.jks" >> "$GITHUB_ENV"
+          echo "SHOMARA_KEY_ALIAS=androiddebugkey" >> "$GITHUB_ENV"
+          echo "SHOMARA_KEYSTORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "SHOMARA_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        env:
+          SHOMARA_ROOT: ${{ github.workspace }}
+        run: bash scripts/build_apk_native.sh
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shomara-debug-apk
+          path: download/Shomara-v16.0.apk
+          if-no-files-found: error
+          retention-days: 14
