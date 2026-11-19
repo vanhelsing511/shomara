@@ -732,7 +732,8 @@ fun bankTxnSheet(act: MainActivity) {
             UI.outlineBtn(act, "انصراف") { bs.close() },
             UI.primaryBtn(act, "افزودن به لیست تطبیق") {
                 if (amount == 0L) { UI.toast(act, "مبلغ را وارد کنید"); return@primaryBtn }
-                Db.update { d -> d.copy(bankTxns = listOf(BankTxn(Db.newId("bt"), bankId0, date, amount, descV.ifEmpty { "تراکنش بانکی" })) + d.bankTxns) }
+                val saved = Db.update { d -> d.copy(bankTxns = listOf(BankTxn(Db.newId("bt"), bankId0, date, amount, descV.ifEmpty { "تراکنش بانکی" })) + d.bankTxns) }
+                if (!saved) { UI.toast(act, "تراکنش ذخیره نشد؛ دوباره تلاش کنید"); return@primaryBtn }
                 bs.close(); act.refresh()
                 UI.toast(act, "تراکنش اضافه شد — حالا با یک لمس تطبیق دهید")
             }))
@@ -786,9 +787,12 @@ fun rulesSheet(act: MainActivity) {
         newCard.addView(swRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = UI.dp(act, 10) })
         newCard.addView(note.first, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = UI.dp(act, 10) })
         val add = UI.primaryBtn(act, "ثبت قانون") {
-            if (findEditor(kw.first).text.toString().trim().isEmpty()) { UI.toast(act, "کلمهٔ کلیدی را وارد کنید"); return@primaryBtn }
-            val noteV = findEditor(note.first).text.toString()
-            Db.update { d -> d.copy(bankRules = d.bankRules + BankRule(Db.newId("br"), findEditor(kw.first).text.toString().trim(), target, noteV.ifEmpty { "دسته‌بندی خودکار" })) }
+            val keyword = findEditor(kw.first).text.toString().trim()
+            if (keyword.isEmpty()) { UI.toast(act, "کلمهٔ کلیدی را وارد کنید"); return@primaryBtn }
+            if (Db.db.bankRules.any { it.keyword.equals(keyword, true) && it.target == target }) { UI.toast(act, "قانون مشابه با همین کلمه و نوع قبلاً ثبت شده است"); return@primaryBtn }
+            val noteV = findEditor(note.first).text.toString().trim()
+            val saved = Db.update { d -> d.copy(bankRules = d.bankRules + BankRule(Db.newId("br"), keyword, target, noteV.ifEmpty { "دسته‌بندی خودکار" })) }
+            if (!saved) { UI.toast(act, "قانون ذخیره نشد؛ دوباره تلاش کنید"); return@primaryBtn }
             bs.close(); act.refresh()
             UI.toast(act, "قانون بانکی ثبت شد — از این به بعد تراکنش‌های مشابه خودکار پیشنهاد می‌شوند")
         }
@@ -900,7 +904,7 @@ fun projectsScreen(act: MainActivity): View {
             titleRow.addView(UI.text(c, p.name, 13.5f, T.text, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             titleRow.addView(UI.chip(c, if (p.done) "تمام‌شده" else if (h.unbilled.isNotEmpty()) J.faN(h.unbilled.size) + " قلم زمان فاکتورنشده" else "همه فاکتور شده", if (p.done) "slate" else if (h.unbilled.isNotEmpty()) "amber" else "green"))
             col.addView(titleRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            col.addView(UI.text(c, (partner?.name?.plus(" • ") ?: "") + "نرخ " + J.moneyFa(p.rate) + " تومان/ساعت • " + J.faN(Math.round(h.totalMin / 60.0)) + " ساعت کار", 10.5f, T.sub))
+            col.addView(UI.text(c, (partner?.name?.plus(" • ") ?: "") + (if (p.code.isNotBlank()) "کد " + p.code + " • " else "") + "نرخ " + J.moneyFa(p.rate) + " تومان/ساعت • " + J.faN(Math.round(h.totalMin / 60.0)) + " ساعت کار" + (if (p.dueDate.isNotBlank()) " • تحویل " + J.jFa(p.dueDate) else ""), 10.5f, T.sub))
             head.addView(col, cl)
             card.addView(head)
 
@@ -1022,13 +1026,16 @@ fun timeEntrySheet(act: MainActivity, projectId: String) {
         var descV = ""
         hookText(desc.first) { v -> descV = v }
         b.addView(desc.first)
+        var billable = true
+        b.addView(UI.switchRow(act, "قابل صورتحساب", "اگر خاموش باشد در فاکتور پروژه وارد نمی‌شود", true) { v -> billable = v })
         b.addView(UI.btnRow(act,
             UI.outlineBtn(act, "انصراف") { bs.close() },
             UI.primaryBtn(act, "ثبت زمان") {
                 if (hoursV <= 0) { UI.toast(act, "ساعت را وارد کنید"); return@primaryBtn }
-                Db.update { d -> d.copy(timeEntries = listOf(
-                    TimeEntry(Db.newId("te"), projectId, date, descV.ifEmpty { "کار انجام‌شده" }, Math.round(hoursV * 60), rateV)
+                val saved = Db.update { d -> d.copy(timeEntries = listOf(
+                    TimeEntry(Db.newId("te"), projectId, date, descV.ifEmpty { "کار انجام‌شده" }, Math.round(hoursV * 60), rateV, "", billable)
                 ) + d.timeEntries) }
+                if (!saved) { UI.toast(act, "زمان کار ذخیره نشد؛ دوباره تلاش کنید"); return@primaryBtn }
                 bs.close(); act.refresh()
                 UI.toast(act, "زمان ثبت شد — " + (proj?.name ?: ""))
             }))
@@ -1040,10 +1047,32 @@ fun projectSheet(act: MainActivity) {
     val db = Db.db
     projPartner = "" // انتخاب قبلی را حمل نکند — انتخابگر همیشه از «بدون مشتری» شروع می‌شود
     bs.show("پروژهٔ جدید", "مشتری و نرخ ساعتی را تعیین کنید") { b ->
-        val name = UI.field(act, "نام پروژه", "", hint = "مثلا تجهیز دفتر مرکزی")
+        val name = UI.field(act, "نام پروژه *", "", hint = "مثلا تجهیز دفتر مرکزی")
         var nameV = ""
-        hookText(name.first) { v -> nameV = v }
+        hookText(name.first) { v -> nameV = v.trim() }
         b.addView(name.first)
+        val code = UI.field(act, "کد پروژه (اختیاری)", "", hint = "مثلا PR-1405-01", center = true)
+        var codeV = ""
+        hookText(code.first) { v -> codeV = v.trim() }
+        b.addView(code.first)
+        val startDate = UI.field(act, "تاریخ شروع (اختیاری)", "", hint = "۱۴۰۵/۰۱/۰۱", center = true)
+        val dueDate = UI.field(act, "تاریخ پایان / تحویل (اختیاری)", "", hint = "۱۴۰۵/۱۲/۲۹", center = true)
+        var startV = ""; var dueV = ""
+        hookText(startDate.first) { v -> startV = v.trim() }
+        hookText(dueDate.first) { v -> dueV = v.trim() }
+        val datesRow = LinearLayout(act); datesRow.orientation = LinearLayout.HORIZONTAL
+        datesRow.addView(startDate.first, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        datesRow.addView(View(act), LinearLayout.LayoutParams(UI.dp(act, 8), ViewGroup.LayoutParams.WRAP_CONTENT))
+        datesRow.addView(dueDate.first, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        b.addView(datesRow)
+        val budget = UI.numField(act, "بودجهٔ پروژه (تومان، اختیاری)", 0)
+        var budgetV = 0L
+        hookNum(budget) { v -> budgetV = v }
+        b.addView(budget)
+        val pDesc = UI.fieldMulti(act, "شرح / محدودهٔ پروژه (اختیاری)", "")
+        var descV = ""
+        hookText(pDesc.first) { v -> descV = v.trim() }
+        b.addView(pDesc.first)
         val pLabel = ValueLabel()
         val pSel = UI.selectField(act, "مشتری", pLabel.current) {
             optionSheet(act, "مشتری", listOf(Opt("", "— بدون مشتری —")) + db.partners.filter { it.type != "supplier" }.map { Opt(it.id, it.name) }, "") { o ->
@@ -1060,11 +1089,29 @@ fun projectSheet(act: MainActivity) {
         b.addView(UI.btnRow(act,
             UI.outlineBtn(act, "انصراف") { bs.close() },
             UI.primaryBtn(act, "ساخت پروژه") {
-                if (nameV.trim().isEmpty()) { UI.toast(act, "نام پروژه را وارد کنید"); return@primaryBtn }
-                Db.update { d -> d.copy(projects = d.projects + Project(
-                    Db.newId("pr"), nameV.trim(), projPartner, rateV,
-                    PROJ_COLORS[d.projects.size % PROJ_COLORS.size]
+                if (nameV.isEmpty()) { UI.toast(act, "نام پروژه را وارد کنید"); return@primaryBtn }
+                if (rateV < 0 || budgetV < 0) { UI.toast(act, "نرخ و بودجه نمی‌توانند منفی باشند"); return@primaryBtn }
+                val datePattern = Regex("[0-9۰-۹٠-٩]{4}/[0-9۰-۹٠-٩]{1,2}/[0-9۰-۹٠-٩]{1,2}")
+                if (startV.isNotBlank() && !datePattern.matches(startV)) { UI.toast(act, "تاریخ شروع را با قالب سال/ماه/روز وارد کنید"); return@primaryBtn }
+                if (dueV.isNotBlank() && !datePattern.matches(dueV)) { UI.toast(act, "تاریخ پایان را با قالب سال/ماه/روز وارد کنید"); return@primaryBtn }
+                if (codeV.isNotBlank() && Db.db.projects.any { it.code.equals(codeV, true) }) { UI.toast(act, "کد پروژه تکراری است"); return@primaryBtn }
+                val normalizedDate = { raw: String ->
+                    val parts = raw.map { ch -> when(ch) { in '۰'..'۹' -> ('0' + (ch - '۰')); in '٠'..'٩' -> ('0' + (ch - '٠')); else -> ch } }.split('/')
+                    if (parts.size != 3) "" else {
+                        val y = parts[0].toIntOrNull() ?: 0; val m = parts[1].toIntOrNull() ?: 0; val d0 = parts[2].toIntOrNull() ?: 0
+                        if (y < 1000 || m !in 1..12 || d0 !in 1..31) "" else String.format(java.util.Locale.ROOT, "%04d/%02d/%02d", y, m, d0)
+                    }
+                }
+                val startNorm = if (startV.isNotBlank()) normalizedDate(startV) else ""
+                val dueNorm = if (dueV.isNotBlank()) normalizedDate(dueV) else ""
+                if (startV.isNotBlank() && startNorm.isEmpty()) { UI.toast(act, "تاریخ شروع معتبر نیست"); return@primaryBtn }
+                if (dueV.isNotBlank() && dueNorm.isEmpty()) { UI.toast(act, "تاریخ پایان معتبر نیست"); return@primaryBtn }
+                if (startNorm.isNotBlank() && dueNorm.isNotBlank() && startNorm > dueNorm) { UI.toast(act, "تاریخ پایان قبل از شروع است"); return@primaryBtn }
+                val saved = Db.update { d -> d.copy(projects = d.projects + Project(
+                    Db.newId("pr"), nameV, projPartner, rateV,
+                    PROJ_COLORS[d.projects.size % PROJ_COLORS.size], false, codeV, startV, dueV, budgetV, descV
                 )) }
+                if (!saved) { UI.toast(act, "پروژه ذخیره نشد؛ اطلاعات را نگه دارید و دوباره تلاش کنید"); return@primaryBtn }
                 projPartner = ""
                 bs.close(); act.refresh()
                 UI.toast(act, "پروژه ساخته شد — حالا ساعت کارش را ثبت کنید")

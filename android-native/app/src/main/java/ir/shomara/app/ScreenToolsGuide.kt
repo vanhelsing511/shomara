@@ -88,7 +88,7 @@ fun toolsScreen(act: MainActivity): View {
     banks.addView(UI.sectionTitle(c, "بانک‌ها و صندوق‌ها", J.faN(db.banks.size) + " حساب", R.drawable.ic_landmark, addBankBtn, topMargin = 0))
     for (b in db.banks) {
         val row = UI.listRow(c, b.name,
-            LB.bankKindLabel(b.kind) + (if (b.accountNo.isNotEmpty()) " • " + J.fa(b.accountNo) else ""),
+            LB.bankKindLabel(b.kind) + (if (b.accountNo.isNotEmpty()) " • حساب " + J.fa(b.accountNo) else "") + (if (b.branch.isNotEmpty()) " • " + b.branch else "") + (if (b.cardNo.isNotEmpty()) " • کارت " + J.fa(b.cardNo.takeLast(4)) else ""),
             UI.endCol(c, J.moneyShort(Db.bankBalance(db, b.id)) + " ت"),
             null, icRes = R.drawable.ic_wallet,
             click = { bankEditorSheet(act, b) })
@@ -111,7 +111,7 @@ fun toolsScreen(act: MainActivity): View {
         val q = remE.text.toString().trim()
         remWrap.removeAllViews()
         val sorted = db.reminders.sortedBy { it.date }
-        val visible = if (q.isEmpty()) sorted else sorted.filter { it.title.contains(q) }
+        val visible = if (q.isEmpty()) sorted else sorted.filter { it.title.contains(q, true) || it.desc.contains(q, true) || it.category.contains(q, true) }
         if (visible.isEmpty()) {
             val em = UI.empty(c, if (q.isEmpty()) "یادآوری نیست" else "چیزی پیدا نشد", "یادآورها مثل سررسید چک و تماس با مشتری", R.drawable.ic_bell)
             remWrap.addView(em, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = UI.dp(c, 8) })
@@ -134,7 +134,7 @@ fun toolsScreen(act: MainActivity): View {
         val title = UI.text(c, r0.title, 12.5f, if (r0.done) T.sub else T.text, true)
         if (r0.done) title.paintFlags = title.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
         col.addView(title)
-        col.addView(UI.text(c, J.jFa(r0.date) + (if (r0.desc.isNotEmpty()) " • " + r0.desc else ""), 10, T.sub))
+        col.addView(UI.text(c, J.jFa(r0.date) + " • " + (when (r0.priority) { "urgent" -> "فوری"; "high" -> "زیاد"; "low" -> "کم"; else -> "معمولی" }) + (if (r0.desc.isNotEmpty()) " • " + r0.desc else ""), 10, T.sub))
         row.addView(col, cl)
         val edit = UI.icon(c, R.drawable.ic_pencil, 16, T.sub)
         edit.setOnClickListener { reminderEditorSheet(act, r0) }
@@ -207,10 +207,25 @@ fun bankEditorSheet(act: MainActivity, b0: Bank?) {
         kLabel.bind(kSel, LB.bankKindLabel(b.kind))
         bd.addView(kSel)
 
-        val accNo = UI.field(act, "شمارهٔ حساب", b.accountNo, ltr = true, center = true)
+        val accNo = UI.field(act, "شمارهٔ حساب (اختیاری)", b.accountNo, ltr = true, center = true)
         val opening = UI.numField(act, "ماندهٔ اولیه", b.opening)
-        hookText(accNo.first) { v -> b = b.copy(accountNo = v) }
+        val branch = UI.field(act, "نام شعبه (اختیاری)", b.branch)
+        val holder = UI.field(act, "نام صاحب حساب (اختیاری)", b.accountHolder)
+        val iban = UI.field(act, "شماره شبا (اختیاری)", b.iban, hint = "IR…", ltr = true, center = true)
+        val cardNo = UI.field(act, "شماره کارت (اختیاری)", b.cardNo, hint = "۱۶ رقم", ltr = true, center = true)
+        val bDesc = UI.fieldMulti(act, "شرح / توضیحات", b.desc)
+        hookText(accNo.first) { v -> b = b.copy(accountNo = v.trim()) }
         hookNum(opening) { v -> b = b.copy(opening = v) }
+        hookText(branch.first) { v -> b = b.copy(branch = v.trim()) }
+        hookText(holder.first) { v -> b = b.copy(accountHolder = v.trim()) }
+        hookText(iban.first) { v -> b = b.copy(iban = v.trim().uppercase().replace(" ", "")) }
+        hookText(cardNo.first) { v -> b = b.copy(cardNo = v.filter { it.isDigit() }) }
+        hookText(bDesc.first) { v -> b = b.copy(desc = v.trim()) }
+        bd.addView(branch.first)
+        bd.addView(holder.first)
+        bd.addView(iban.first)
+        bd.addView(cardNo.first)
+        bd.addView(bDesc.first)
         val r = LinearLayout(act)
         r.orientation = LinearLayout.HORIZONTAL
         r.addView(accNo.first, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
@@ -222,12 +237,17 @@ fun bankEditorSheet(act: MainActivity, b0: Bank?) {
             UI.outlineBtn(act, "انصراف") { bs.close() },
             UI.primaryBtn(act, "ذخیره") {
                 if (b.name.trim().isEmpty()) { UI.toast(act, "نام صندوق/بانک را بنویسید"); return@primaryBtn }
-                if (isNew) {
+                if (b.accountNo.isNotBlank() && b.accountNo.filter { it.isDigit() }.length !in 6..30) { UI.toast(act, "شماره حساب نامعتبر است"); return@primaryBtn }
+                if (b.iban.isNotBlank() && !Regex("IR[0-9]{24}").matches(b.iban.uppercase())) { UI.toast(act, "شبا باید با IR و ۲۴ رقم وارد شود"); return@primaryBtn }
+                if (b.cardNo.isNotBlank() && b.cardNo.filter { it.isDigit() }.length != 16) { UI.toast(act, "شماره کارت باید ۱۶ رقم باشد"); return@primaryBtn }
+                if (b.opening < 0 && b.kind != "cash") { UI.toast(act, "ماندهٔ اولیه حساب بانکی نمی‌تواند منفی باشد"); return@primaryBtn }
+                val saved = if (isNew) {
                     b = b.copy(id = Db.newId("bk"))
                     Db.update { d -> d.copy(banks = d.banks + b) }
                 } else {
                     Db.update { d -> d.copy(banks = d.banks.map { if (it.id == b.id) b else it }) }
                 }
+                if (!saved) { UI.toast(act, "ذخیرهٔ حساب انجام نشد؛ اطلاعات را نگه دارید و دوباره تلاش کنید"); return@primaryBtn }
                 bs.close(); act.refresh()
                 UI.toast(act, "ذخیره شد — " + b.name)
             }))
@@ -259,19 +279,33 @@ fun reminderEditorSheet(act: MainActivity, r0: Reminder) {
         }
         dLabel.bind(dField, J.jFa(r.date))
         b.addView(dField)
-        val desc = UI.field(act, "توضیحات", r.desc)
+        val desc = UI.fieldMulti(act, "توضیحات / اقدام بعدی", r.desc)
         hookText(desc.first) { v -> r = r.copy(desc = v) }
         b.addView(desc.first)
+        val catLabel = ValueLabel()
+        val catSel = UI.selectField(act, "دستهٔ یادآور", catLabel.current) {
+            val options = listOf(Opt("general", "عمومی"), Opt("finance", "مالی / تسویه"), Opt("sales", "فروش / مشتری"), Opt("purchase", "خرید / تأمین"), Opt("inventory", "انبار"), Opt("project", "پروژه"), Opt("tax", "مالیات"))
+            optionSheet(act, "دستهٔ یادآور", options, r.category) { o -> r = r.copy(category = o.id); catLabel.set(o.label) }
+        }
+        catLabel.bind(catSel, listOf(Opt("general", "عمومی"), Opt("finance", "مالی / تسویه"), Opt("sales", "فروش / مشتری"), Opt("purchase", "خرید / تأمین"), Opt("inventory", "انبار"), Opt("project", "پروژه"), Opt("tax", "مالیات")).firstOrNull { it.id == r.category }?.label ?: "عمومی")
+        b.addView(catSel)
+        val prLabel = ValueLabel()
+        val prSel = UI.selectField(act, "اولویت", prLabel.current) {
+            optionSheet(act, "اولویت یادآور", listOf(Opt("low", "کم"), Opt("normal", "معمولی"), Opt("high", "زیاد"), Opt("urgent", "فوری")), r.priority) { o -> r = r.copy(priority = o.id); prLabel.set(o.label) }
+        }
+        prLabel.bind(prSel, listOf(Opt("low", "کم"), Opt("normal", "معمولی"), Opt("high", "زیاد"), Opt("urgent", "فوری")).firstOrNull { it.id == r.priority }?.label ?: "معمولی")
+        b.addView(prSel)
         b.addView(UI.btnRow(act,
             UI.outlineBtn(act, "انصراف") { bs.close() },
             UI.primaryBtn(act, "ذخیره") {
                 if (r.title.trim().isEmpty()) { UI.toast(act, "عنوان یادآور را بنویسید"); return@primaryBtn }
-                if (isNew) {
+                val saved = if (isNew) {
                     r = r.copy(id = Db.newId("rm"))
                     Db.update { d -> d.copy(reminders = d.reminders + r) }
                 } else {
                     Db.update { d -> d.copy(reminders = d.reminders.map { if (it.id == r.id) r else it }) }
                 }
+                if (!saved) { UI.toast(act, "یادآور ذخیره نشد؛ دوباره تلاش کنید"); return@primaryBtn }
                 bs.close(); act.refresh()
                 UI.toast(act, "یادآور ذخیره شد — " + r.title)
             }))

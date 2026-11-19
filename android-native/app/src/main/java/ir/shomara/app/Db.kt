@@ -653,7 +653,7 @@ object Db {
                 "با یک لمس با فاکتورها و دریافت‌ها تطبیق دهید", "reconcile"))
         }
 
-        val unbilled = d.timeEntries.filter { it.billed.isEmpty() }
+        val unbilled = d.timeEntries.filter { it.billed.isEmpty() && it.billable }
         if (unbilled.isNotEmpty()) {
             val h = unbilled.sumOf { it.minutes } / 60.0
             val v = unbilled.sumOf { (it.minutes / 60.0) * it.rate }
@@ -693,7 +693,7 @@ object Db {
     fun projectHours(d: DB, projectId: String): ProjHours {
         val entries = d.timeEntries.filter { it.projectId == projectId }.sortedByDescending { it.date }
         val totalMin = entries.sumOf { it.minutes }
-        val unbilled = entries.filter { it.billed.isEmpty() }
+        val unbilled = entries.filter { it.billed.isEmpty() && it.billable }
         val unbilledMin = unbilled.sumOf { it.minutes }
         val unbilledValue = unbilled.sumOf { (it.minutes / 60.0) * it.rate }
         return ProjHours(entries, totalMin, unbilled, unbilledMin, unbilledValue)
@@ -790,7 +790,7 @@ object Db {
             put("creditLimit", p.creditLimit); put("paymentTermDays", p.paymentTermDays)
         }) })
         o.put("banks", JSONArray().apply { for (b in d.banks) put(JSONObject().apply {
-            put("id", b.id); put("name", b.name); put("kind", b.kind); put("accountNo", b.accountNo); put("opening", b.opening)
+            put("id", b.id); put("name", b.name); put("kind", b.kind); put("accountNo", b.accountNo); put("opening", b.opening); put("branch", b.branch); put("iban", b.iban); put("cardNo", b.cardNo); put("accountHolder", b.accountHolder); put("desc", b.desc)
         }) })
         o.put("invoices", JSONArray().apply { for (i in d.invoices) put(JSONObject().apply {
             put("id", i.id); put("no", i.no); put("kind", i.kind); put("partnerId", i.partnerId)
@@ -823,7 +823,7 @@ object Db {
             }) })
         }) })
         o.put("reminders", JSONArray().apply { for (r in d.reminders) put(JSONObject().apply {
-            put("id", r.id); put("date", r.date); put("title", r.title); put("desc", r.desc); put("done", r.done)
+            put("id", r.id); put("date", r.date); put("title", r.title); put("desc", r.desc); put("done", r.done); put("priority", r.priority); put("category", r.category)
         }) })
         o.put("recurring", JSONArray().apply { for (r in d.recurring) put(JSONObject().apply {
             put("id", r.id); put("title", r.title); put("active", r.active); put("partnerId", r.partnerId)
@@ -833,11 +833,11 @@ object Db {
         }) })
         o.put("projects", JSONArray().apply { for (p in d.projects) put(JSONObject().apply {
             put("id", p.id); put("name", p.name); put("partnerId", p.partnerId)
-            put("rate", p.rate); put("color", p.color); put("done", p.done)
+            put("rate", p.rate); put("color", p.color); put("done", p.done); put("code", p.code); put("startDate", p.startDate); put("dueDate", p.dueDate); put("budget", p.budget); put("desc", p.desc)
         }) })
         o.put("timeEntries", JSONArray().apply { for (t in d.timeEntries) put(JSONObject().apply {
             put("id", t.id); put("projectId", t.projectId); put("date", t.date); put("desc", t.desc)
-            put("minutes", t.minutes); put("rate", t.rate); put("billed", t.billed)
+            put("minutes", t.minutes); put("rate", t.rate); put("billed", t.billed); put("billable", t.billable)
         }) })
         o.put("bankTxns", JSONArray().apply { for (t in d.bankTxns) put(JSONObject().apply {
             put("id", t.id); put("bankId", t.bankId); put("date", t.date); put("amount", t.amount); put("desc", t.desc)
@@ -886,7 +886,7 @@ object Db {
         }
         val banks = (0 until arr("banks").length()).mapNotNull { i ->
             val o = arr("banks").optJSONObject(i) ?: return@mapNotNull null
-            Bank(s(o, "id"), s(o, "name"), s(o, "kind", "cash"), s(o, "accountNo"), o.optLong("opening"))
+            Bank(s(o, "id"), s(o, "name"), s(o, "kind", "cash"), s(o, "accountNo"), o.optLong("opening"), s(o, "branch"), s(o, "iban"), s(o, "cardNo"), s(o, "accountHolder"), s(o, "desc"))
         }
         val invoices = (0 until arr("invoices").length()).mapNotNull { i ->
             val o = arr("invoices").optJSONObject(i) ?: return@mapNotNull null
@@ -922,7 +922,7 @@ object Db {
         }
         val reminders = (0 until arr("reminders").length()).mapNotNull { i ->
             val o = arr("reminders").optJSONObject(i) ?: return@mapNotNull null
-            Reminder(s(o, "id"), s(o, "date"), s(o, "title"), s(o, "desc"), b(o, "done"))
+            Reminder(s(o, "id"), s(o, "date"), s(o, "title"), s(o, "desc"), b(o, "done"), s(o, "priority", "normal"), s(o, "category", "general"))
         }
         val recurring = (0 until arr("recurring").length()).mapNotNull { i ->
             val o = arr("recurring").optJSONObject(i) ?: return@mapNotNull null
@@ -932,11 +932,11 @@ object Db {
         }
         val projects = (0 until arr("projects").length()).mapNotNull { i ->
             val o = arr("projects").optJSONObject(i) ?: return@mapNotNull null
-            Project(s(o, "id"), s(o, "name"), s(o, "partnerId"), o.optLong("rate"), s(o, "color", "#0d9488"), b(o, "done"))
+            Project(s(o, "id"), s(o, "name"), s(o, "partnerId"), o.optLong("rate"), s(o, "color", "#0d9488"), b(o, "done"), s(o, "code"), s(o, "startDate"), s(o, "dueDate"), o.optLong("budget"), s(o, "desc"))
         }
         val timeEntries = (0 until arr("timeEntries").length()).mapNotNull { i ->
             val o = arr("timeEntries").optJSONObject(i) ?: return@mapNotNull null
-            TimeEntry(s(o, "id"), s(o, "projectId"), s(o, "date"), s(o, "desc"), o.optLong("minutes"), o.optLong("rate"), s(o, "billed"))
+            TimeEntry(s(o, "id"), s(o, "projectId"), s(o, "date"), s(o, "desc"), o.optLong("minutes"), o.optLong("rate"), s(o, "billed"), b(o, "billable", true))
         }
         val bankTxns = (0 until arr("bankTxns").length()).mapNotNull { i ->
             val o = arr("bankTxns").optJSONObject(i) ?: return@mapNotNull null

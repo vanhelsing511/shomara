@@ -44,7 +44,12 @@ data class Bank(
     val name: String,
     val kind: String,         // cash | bank | pos
     val accountNo: String = "",
-    val opening: Long = 0
+    val opening: Long = 0,
+    val branch: String = "",
+    val iban: String = "",
+    val cardNo: String = "",
+    val accountHolder: String = "",
+    val desc: String = ""
 )
 
 data class InvoiceLine(val id: String, val itemId: String, val qty: Double, val price: Long, val discount: Double)
@@ -131,7 +136,7 @@ data class StockDoc(
     val desc: String = ""
 )
 
-data class Reminder(val id: String, val date: String, val title: String, val desc: String = "", val done: Boolean = false)
+data class Reminder(val id: String, val date: String, val title: String, val desc: String = "", val done: Boolean = false, val priority: String = "normal", val category: String = "general")
 
 data class Recurring(
     val id: String,
@@ -153,7 +158,12 @@ data class Project(
     val partnerId: String = "",
     val rate: Long = 0,
     val color: String,
-    val done: Boolean = false
+    val done: Boolean = false,
+    val code: String = "",
+    val startDate: String = "",
+    val dueDate: String = "",
+    val budget: Long = 0,
+    val desc: String = ""
 )
 
 data class TimeEntry(
@@ -163,7 +173,8 @@ data class TimeEntry(
     val desc: String,
     val minutes: Long,
     val rate: Long,
-    val billed: String = ""
+    val billed: String = "",
+    val billable: Boolean = true
 )
 
 data class BankMatch(val kind: String, val label: String) // receipt | payment | expense | skip
